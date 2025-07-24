@@ -1,0 +1,73 @@
+# .github/workflows/ci-java.yml
+name: Java & JSP CI
+
+on:
+  push:
+    paths:
+      - '**/*.java'
+      - '**/*.jsp'
+  pull_request:
+    paths:
+      - '**/*.java'
+      - '**/*.jsp'
+
+jobs:
+  compile-and-analyze:
+    name: Compile, Test & Code Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install needed packages
+        run: |
+          sudo apt-get update -qq
+          # Servlet API for compilation
+          sudo apt-get install -y libtomcat9-java
+          # Static analysis tools
+          sudo apt-get install -y checkstyle spotbugs pmd
+
+      - name: Compile Java sources
+        run: |
+          mkdir -p target/classes
+          find . -type f -name '*.java' > sources.txt
+          export CLASSPATH=/usr/share/java/servlet-api.jar
+          javac -encoding UTF-8 -cp $CLASSPATH -d target/classes @sources.txt
+
+      - name: Package WAR
+        run: |
+          mkdir -p target/webapp/WEB-INF/classes
+          cp -r target/classes/* target/webapp/WEB-INF/classes/
+          cp -r *.jsp target/webapp/
+          cd target/webapp
+          jar cvf ../app.war .
+
+      - name: Run Checkstyle (format/style)
+        run: |
+          curl -sSL https://raw.githubusercontent.com/checkstyle/checkstyle/master/src/main/resources/google_checks.xml \
+            -o google_checks.xml
+          find . -name "*.java" > java_files.txt
+          # violations가 있으면 non-zero exit -> CI 실패
+          checkstyle -c google_checks.xml $(cat java_files.txt)
+
+      - name: Run PMD (best practices)
+        run: |
+          pmd -d . -R category/java/bestpractices.xml -f text \
+            || (echo 'PMD violations detected' && exit 1)
+
+      - name: Run SpotBugs (bug patterns)
+        run: |
+          spotbugs -textui -effort:max -exitcode target/classes
+
+      - name: Upload WAR artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-war
+          path: target/app.war

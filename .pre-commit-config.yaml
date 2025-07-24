@@ -1,0 +1,70 @@
+exclude: >
+  (?x)^(
+    backend/static|
+    backend/fixtures|
+    backend/.+/migrations
+  )
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.0.1
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: detect-private-key
+      - id: detect-aws-credentials
+        args: [--allow-missing-credentials]
+        files: ^(app|tests)/
+
+  # ───────── Java Hooks ─────────
+  - repo: https://github.com/pre-commit/mirrors-google-java-format
+    rev: v1.15.0
+    hooks:
+      - id: google-java-format
+        args: [--replace]
+        files: \.java$
+
+  - repo: local
+    hooks:
+      - id: java-compile
+        name: Java 컴파일 검사
+        entry: bash -c "\
+          mkdir -p /tmp/javac_test && \
+          find . -name '*.java' > sources.txt && \
+          javac -encoding UTF-8 -cp /usr/share/java/servlet-api.jar -d /tmp/javac_test @sources.txt"
+        language: system
+        files: \.java$
+
+      - id: checkstyle
+        name: Checkstyle 검사
+        entry: bash -c "\
+          curl -sSL https://raw.githubusercontent.com/checkstyle/checkstyle/master/src/main/resources/google_checks.xml \
+            -o google_checks.xml && \
+          checkstyle -c google_checks.xml $(find . -name '*.java')"
+        language: system
+        files: \.java$
+
+      - id: pmd
+        name: PMD 검사
+        entry: bash -c "\
+          pmd -d . -R category/java/bestpractices.xml -f text \
+            || (echo 'PMD violations detected' && exit 1)"
+        language: system
+        files: \.java$
+
+      - id: spotbugs
+        name: SpotBugs 검사
+        entry: bash -c "\
+          spotbugs -textui -effort:max -exitcode /tmp/javac_test"
+        language: system
+        files: \.java$
+
+      - id: jsp-syntax
+        name: JSP 문법 검사 (jspc)
+        entry: bash -c "\
+          if command -v jspc &>/dev/null; then \
+            jspc -uriroot . -d /tmp/jspc_test *.jsp; \
+          else echo 'jspc not installed, skipping'; fi"
+        language: system
+        files: \.jsp$
