@@ -35,10 +35,13 @@ jobs:
         run: |
           PMD_VER=6.64.0
           wget -q https://github.com/pmd/pmd/releases/download/pmd_releases/${PMD_VER}/pmd-bin-${PMD_VER}.zip
-          unzip -q pmd-bin-${PMD_VER}.zip
-          export PMD_HOME=$PWD/pmd-bin-${PMD_VER}
+          PMD_VER=7.14.0
+          curl -fsSL \
+          "https://github.com/pmd/pmd/releases/download/pmd_releases/${PMD_VER}/pmd-bin-${PMD_VER}.zip" \
+          -o pmd.zip
+          unzip -q pmd.zip
           echo "export PMD_HOME=$PWD/pmd-bin-${PMD_VER}" >> $GITHUB_ENV
-          echo "export PATH=$PMD_HOME/bin:$PATH" >> $GITHUB_ENV
+          echo "export PATH=$PMD_HOME/bin:$PATH"      >> $GITHUB_ENV
 
       - name: Install SpotBugs CLI
         run: |
