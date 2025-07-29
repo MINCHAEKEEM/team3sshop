@@ -1,90 +1,46 @@
-# .github/workflows/ci-java.yml
-name: Java & JSP CI
+name: PR 시 CI 테스트 자동화
 
 on:
-  push:
-    paths:
-      - '**/*.java'
-      - '**/*.jsp'
   pull_request:
-    paths:
-      - '**/*.java'
-      - '**/*.jsp'
+    branches:
+      - main
 
 jobs:
-  compile-and-analyze:
-    name: Compile, Test & Code Analysis
+  test:
+    name: Test
     runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    permissions:
+      checks: write
+      pull-requests: write
 
-      - name: Set up JDK 17
+    steps:
+      - name: 레포지토리 체크아웃
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GIT_TOKEN }}
+
+      - name: JDK 17 설치
         uses: actions/setup-java@v3
         with:
-          distribution: temurin
+          distribution: 'oracle'
           java-version: '17'
 
-      - name: Install servlet API
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y libtomcat9-java libeclipse-jdt-core-java
+      - name: Gradle 명령 실행 권한 부여
+        run: chmod +x ./gradlew
+        shell: bash
 
-      - name: Install PMD CLI
-        run: |
-          PMD_VER=6.64.0
-          wget -q https://github.com/pmd/pmd/releases/download/pmd_releases/${PMD_VER}/pmd-bin-${PMD_VER}.zip
-          PMD_VER=7.14.0
-          curl -fsSL \
-          "https://github.com/pmd/pmd/releases/download/pmd_releases/${PMD_VER}/pmd-bin-${PMD_VER}.zip" \
-          -o pmd.zip
-          unzip -q pmd.zip
-          echo "export PMD_HOME=$PWD/pmd-bin-${PMD_VER}" >> $GITHUB_ENV
-          echo "export PATH=$PMD_HOME/bin:$PATH"      >> $GITHUB_ENV
+      - name: Gradle로 프로젝트 Build
+        run: ./gradlew build
 
-      - name: Install SpotBugs CLI
-        run: |
-          SB_VER=4.7.3
-          wget -q https://github.com/spotbugs/spotbugs/releases/download/${SB_VER}/spotbugs-${SB_VER}.zip
-          unzip -q spotbugs-${SB_VER}.zip
-          export SPOTBUGS_HOME=$PWD/spotbugs-${SB_VER}
-          echo "export SPOTBUGS_HOME=$PWD/spotbugs-${SB_VER}" >> $GITHUB_ENV
-          echo "export PATH=$SPOTBUGS_HOME/bin:$PATH" >> $GITHUB_ENV
-
-      - name: Compile Java sources
-        run: |
-          mkdir -p target/classes
-          find . -type f -name '*.java' > sources.txt
-          export CLASSPATH=/usr/share/java/servlet-api.jar
-          javac -encoding UTF-8 -cp $CLASSPATH -d target/classes @sources.txt
-
-      - name: Package WAR
-        run: |
-          mkdir -p target/webapp/WEB-INF/classes
-          cp -r target/classes/* target/webapp/WEB-INF/classes/
-          cp -r *.jsp target/webapp/
-          cd target/webapp
-          jar cvf ../app.war .
-
-      - name: Run Checkstyle
-        run: |
-          curl -sSL https://raw.githubusercontent.com/checkstyle/checkstyle/master/src/main/resources/google_checks.xml \
-            -o google_checks.xml
-          find . -name "*.java" > java_files.txt
-          checkstyle -c google_checks.xml $(cat java_files.txt)
-
-      - name: Run PMD
-        run: |
-          pmd -d . -R category/java/bestpractices.xml -f text \
-            || (echo 'PMD violations detected' && exit 1)
-
-      - name: Run SpotBugs
-        run: |
-          spotbugs -textui -effort:max -exitcode target/classes
-
-      - name: Upload WAR artifact
-        uses: actions/upload-artifact@v4
+      - name: 테스트 결과를 PR 코멘트로 출력
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
         with:
-          name: app-war
-          path: target/app.war
+          files: '**/build/test-results/test/TEST-*.xml'
+
+      - name: 테스트 실패 시, 오류가 발생한 코드 라인에 코멘트 추가
+        uses: mikepenz/action-junit-report@v4
+        if: always()
+        with:
+          report_paths: '**/build/test-results/test/TEST-*.xml'
