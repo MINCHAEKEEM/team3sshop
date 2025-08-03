@@ -108,7 +108,7 @@ spec:
     name: https
     port: 443
     protocol: TCP
-    targetPort: https
+    targetPort: 10250
   selector:
     k8s-app: metrics-server
 ---
@@ -152,7 +152,7 @@ spec:
         name: metrics-server
         ports:
         - containerPort: 10250
-          name: metrics
+          name: https
           protocol: TCP
         readinessProbe:
           failureThreshold: 3
